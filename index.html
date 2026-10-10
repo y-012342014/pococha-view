@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pococha ポイント差</title>
+<!--
+  GitHub Pages に置く「見るだけ」ページ。
+
+  このページ自体はただの静的ファイルで、データは持っていない。
+  表示のたびに、米倉さんのPCで動いている pococha_public.py（読み取り専用）へ
+  直接問い合わせる。Pages は配信のみ、中身は 1 秒ごとに更新される。
+
+  このファイルに接続先も合い言葉も書かない（リポジトリは公開なので）。
+  見る人には次の形の URL を渡す:
+    https://<ユーザー名>.github.io/<リポジトリ>/?api=https://<ホスト>.ts.net&k=<合い言葉>
+  一度開けば、接続先と合い言葉はその人のブラウザに覚えさせる（localStorage）。
+-->
+<style>
+  :root{--bg:#0d0f14;--card:#161b24;--line:#252d3a;--fg:#e8ecf4;--sub:#8b93a7;
+    --accent:#4de0c0;--pos:#5bd98a;--neg:#ff7b7b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);padding:14px 12px 40px;
+    font:14px/1.6 system-ui,-apple-system,"Segoe UI","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif}
+  .wrap{max-width:720px;margin:0 auto}
+  h1{font-size:15px;margin:0}
+  .sub{color:var(--sub);font-size:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px 15px;margin-top:12px}
+  .ev{font-weight:700}
+  .big{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+  .gap{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
+  .up{color:var(--neg)}.down{color:var(--pos)}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-variant-numeric:tabular-nums}
+  th,td{padding:5px 4px;border-bottom:1px solid var(--line);font-size:13px;text-align:right}
+  th{color:var(--sub);font-weight:600;font-size:11px}
+  td.l,th.l{text-align:left;max-width:48vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  tr.me td{color:var(--accent);font-weight:700}
+  .live{color:var(--pos);font-size:10px}
+  .err{color:var(--neg)}
+  .setup{display:none;gap:8px;flex-direction:column;margin-top:12px}
+  .setup.on{display:flex}
+  input{background:#0a0d12;color:var(--fg);border:1px solid var(--line);border-radius:8px;
+    padding:9px 11px;font-size:14px;width:100%}
+  button{background:var(--accent);color:#0a0d12;border:0;border-radius:8px;padding:9px 16px;
+    font-size:14px;font-weight:700;cursor:pointer}
+  .hint{color:var(--sub);font-size:12px}
+</style>
+</head>
+<body><div class="wrap">
+  <h1 id="title">読み込み中…</h1>
+  <div class="sub" id="meta"></div>
+  <div id="list"></div>
+
+  <div class="setup" id="setup">
+    <div class="hint">接続先と合い言葉を入れてください（教えてもらった URL をそのまま開けば自動で入ります）</div>
+    <input id="api" placeholder="https://xxxx.ts.net" autocapitalize="off" autocomplete="off" spellcheck="false">
+    <input id="key" placeholder="合い言葉" autocapitalize="off" autocomplete="off" spellcheck="false">
+    <button id="save">つなぐ</button>
+  </div>
+
+  <div class="sub" style="margin-top:18px" id="foot"></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const Q=new URLSearchParams(location.search);
+const LS="pococha-view";
+
+function conf(){
+  const q={api:Q.get("api"),k:Q.get("k")};
+  if(q.api&&q.k){ localStorage.setItem(LS,JSON.stringify(q)); return q; }
+  try{ const s=JSON.parse(localStorage.getItem(LS)||"{}");
+       return {api:q.api||s.api||"", k:q.k||s.k||""}; }catch(e){ return {api:q.api||"",k:q.k||""}; }
+}
+let C=conf();
+
+const esc=s=>{const d=document.createElement("div");d.textContent=s==null?"":s;return d.innerHTML;};
+const man=v=>(Math.abs(v)/10000).toFixed(1);
+function left(iso){
+  if(!iso) return "";
+  const ms=new Date(iso)-new Date();
+  if(isNaN(ms)) return "";
+  if(ms<=0) return "終了";
+  const d=Math.floor(ms/86400000),h=Math.floor(ms%86400000/3600000),m=Math.floor(ms%3600000/60000);
+  return d>0?`残り${d}日${h}時間`:(h>0?`残り${h}時間${m}分`:`残り${m}分`);
+}
+function card(e){
+  const t=e.target;
+  const g=e.threat?{d:"up",n:e.threat.name,v:-e.threat.gap}
+         :(e.chaser?{d:"down",n:e.chaser.name,v:e.chaser.gap}:null);
+  const rows=e.rows.map(r=>`<tr class="${r.is_target?"me":""}">`
+    +`<td>${r.rank}</td><td class="l">${esc(r.name)}${r.live?' <span class="live">●LIVE</span>':""}</td>`
+    +`<td>${(r.score||0).toLocaleString()}</td>`
+    +`<td>${r.pts_per_min>0?"+"+Math.round(r.pts_per_min).toLocaleString():"±0"}</td></tr>`).join("");
+  return `<div class="card"><div class="ev">${esc(e.festival_name)}</div>`
+    +`<div class="sub">${esc(e.block_label)}　${left(e.event_end)}</div>`
+    +(t?`<div style="margin-top:8px"><span class="sub">${esc(t.name)}</span> `
+        +`<span class="sub">${t.rank}位</span> <span class="big">${(t.score||0).toLocaleString()}</span>`
+        +`<span class="sub"> pt</span>`
+        +(g?`　<span class="gap ${g.d}">${g.v>=0?"+":"−"}${man(g.v)}万</span>`
+            +`<span class="sub"> ${esc(g.n)}</span>`:"")
+        +`</div>`:'<div class="sub" style="margin-top:8px">追跡対象なし</div>')
+    +`<table><tr><th>順位</th><th class="l">ライバー</th><th>pt</th><th>pt/分</th></tr>${rows}</table></div>`;
+}
+
+function showSetup(msg){
+  $("setup").classList.add("on");
+  $("api").value=C.api||""; $("key").value=C.k||"";
+  $("title").innerHTML=msg||"接続先を設定してください";
+  $("list").innerHTML="";
+}
+$("save").onclick=()=>{
+  C={api:$("api").value.trim().replace(/\/+$/,""), k:$("key").value.trim()};
+  localStorage.setItem(LS,JSON.stringify(C));
+  $("setup").classList.remove("on");
+  tick();
+};
+
+let fails=0;
+async function tick(){
+  if(!C.api||!C.k){ showSetup(); return; }
+  try{
+    const r=await fetch(C.api+"/api/public?k="+encodeURIComponent(C.k),{cache:"no-store"});
+    if(r.status===401||r.status===403){ showSetup('<span class="err">合い言葉が違います</span>'); return; }
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const d=await r.json();
+    fails=0;
+    $("setup").classList.remove("on");
+    $("title").textContent="Pococha ポイント差";
+    $("meta").textContent=d.events.length?`${d.events.length} イベントを追跡中`
+      :"いま追跡しているイベントはありません";
+    $("list").innerHTML=d.events.map(card).join("");
+    const age=d.events[0]&&d.events[0].age_sec!=null?`（取得 ${d.events[0].age_sec} 秒前）`:"";
+    $("foot").textContent="更新 "+new Date().toLocaleTimeString("ja-JP")+age;
+  }catch(e){
+    fails++;
+    // PC が落ちている・Funnel が切れている間は、画面は消さずに注意書きだけ出す
+    $("foot").innerHTML='<span class="err">つながりません（'+fails+'回）</span>'
+      +' <span class="sub">PC 側が止まっているかもしれません</span>';
+    if(fails===1&&!$("list").innerHTML) showSetup('<span class="err">つながりません</span>');
+  }
+}
+tick(); setInterval(tick,1000);
+</script>
+</body>
+</html>
