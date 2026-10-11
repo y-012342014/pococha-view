@@ -46,11 +46,24 @@
   button{background:var(--accent);color:#0a0d12;border:0;border-radius:8px;padding:9px 16px;
     font-size:14px;font-weight:700;cursor:pointer}
   .hint{color:var(--sub);font-size:12px}
+  .cmp{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-top:12px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{background:transparent;color:var(--sub);border:1px dashed var(--line);border-radius:999px;
+    padding:4px 11px;font-size:13px;font-weight:600}
+  .chip.on{color:var(--accent);border:1px solid var(--accent)}
+  .addrow{display:flex;gap:8px;margin-top:8px}
+  .addrow input{width:auto;flex:1;max-width:160px}
+  .cmpl{margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
+  .cl{display:flex;align-items:baseline;gap:8px;padding:2px 0;font-variant-numeric:tabular-nums}
+  .cl .cn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cl .gap{font-size:16px}
+  td.up,td.down{font-weight:700}
 </style>
 </head>
 <body><div class="wrap">
   <h1 id="title">読み込み中…</h1>
   <div class="sub" id="meta"></div>
+  <div class="cmp" id="cmp"></div>
   <div id="list"></div>
 
   <div class="setup" id="setup">
@@ -85,27 +98,89 @@ function left(iso){
   const d=Math.floor(ms/86400000),h=Math.floor(ms%86400000/3600000),m=Math.floor(ms%3600000/60000);
   return d>0?`残り${d}日${h}時間`:(h>0?`残り${h}時間${m}分`:`残り${m}分`);
 }
+// ---- 比べる順位（見る人ごとに localStorage へ覚える。既定は 1つ上・1つ下）----
+const CK="pococha-view-cmp";
+let CMP=(()=>{try{const v=JSON.parse(localStorage.getItem(CK));if(Array.isArray(v))return v;}catch(e){}return [{t:"nb"}];})();
+let LAST=null;
+function saveCmp(){try{localStorage.setItem(CK,JSON.stringify(CMP));}catch(e){}}
+const hasNb=()=>CMP.some(c=>c.t==="nb");
+const hasRk=n=>CMP.some(c=>c.t==="rk"&&c.n===n);
+function fmtDiff(v){
+  const a=Math.abs(v), s=a>=10000?(a/10000).toFixed(1)+"万":Math.round(a).toLocaleString();
+  return (v>=0?"+":"−")+s;
+}
+function renderCmp(){                       // チップだけ描き直す（入力欄は残す）
+  const chips=[hasNb()
+    ?'<button class="chip on" data-act="nb-off">1つ上・1つ下 ×</button>'
+    :'<button class="chip" data-act="nb-on">＋ 1つ上・1つ下</button>'];
+  CMP.filter(c=>c.t==="rk").sort((x,y)=>x.n-y.n).forEach(c=>
+    chips.push(`<button class="chip on" data-act="rk-off" data-n="${c.n}">${c.n}位 ×</button>`));
+  $("chips").innerHTML=chips.join("");
+}
+$("cmp").innerHTML='<div class="sub">比べる順位（何個でも追加できます）</div>'
+  +'<div class="chips" id="chips"></div>'
+  +'<div class="addrow"><input id="rkIn" type="number" inputmode="numeric" min="1" placeholder="順位（例 3）">'
+  +'<button id="rkAdd" class="chip on">＋ 順位を追加</button></div>';
+$("cmp").onclick=ev=>{
+  const b=ev.target.closest("button"); if(!b) return;
+  if(b.id==="rkAdd"){
+    const n=parseInt($("rkIn").value,10);
+    if(!(n>=1&&n<=9999)){ $("rkIn").focus(); return; }
+    if(!hasRk(n)) CMP.push({t:"rk",n:n});
+    $("rkIn").value="";
+  }
+  else if(b.dataset.act==="nb-on") CMP.push({t:"nb"});
+  else if(b.dataset.act==="nb-off") CMP=CMP.filter(c=>c.t!=="nb");
+  else if(b.dataset.act==="rk-off"){ const n=+b.dataset.n; CMP=CMP.filter(c=>!(c.t==="rk"&&c.n===n)); }
+  else return;
+  saveCmp(); renderCmp(); render();
+};
+
+// 差は「追跡対象 − その人」。プラスは追跡対象のリード、マイナスは追われている側。
+function cmpLines(e){
+  const t=e.target, rows=e.rows||[];
+  const at=k=>rows.find(r=>r.rank===k);
+  const line=(label,r)=>r
+    ?`<div class="cl"><span class="sub">${label}</span><span class="cn">${esc(r.name)}</span>`
+      +`<span class="gap ${t.score-r.score>=0?"down":"up"}">${fmtDiff(t.score-r.score)}</span></div>`
+    :`<div class="cl"><span class="sub">${label}</span><span class="sub">該当なし</span></div>`;
+  const out=[];
+  for(const c of CMP){
+    if(c.t==="nb"){
+      if(t.rank>1) out.push(line(`1つ上（${t.rank-1}位）`,at(t.rank-1)));
+      out.push(line(`1つ下（${t.rank+1}位）`,at(t.rank+1)));
+    }else if(c.n!==t.rank) out.push(line(`${c.n}位`,at(c.n)));
+  }
+  return out.length?`<div class="cmpl">${out.join("")}</div>`:"";
+}
+
 function card(e){
   const t=e.target;
-  const g=e.threat?{d:"up",n:e.threat.name,v:-e.threat.gap}
-         :(e.chaser?{d:"down",n:e.chaser.name,v:e.chaser.gap}:null);
-  const rows=e.rows.map(r=>`<tr class="${r.is_target?"me":""}">`
-    +`<td>${r.rank}</td><td class="l">${esc(r.name)}${r.live?' <span class="live">●LIVE</span>':""}</td>`
-    +`<td>${(r.score||0).toLocaleString()}</td>`
-    +`<td>${r.pts_per_min>0?"+"+Math.round(r.pts_per_min).toLocaleString():"±0"}</td></tr>`).join("");
+  const rows=(e.rows||[]).map(r=>{
+    const d=t?t.score-r.score:null;
+    const dc=(r.is_target||d==null)?"":(d>=0?"down":"up");
+    return `<tr class="${r.is_target?"me":""}">`
+      +`<td>${r.rank}</td><td class="l">${esc(r.name)}${r.live?' <span class="live">●LIVE</span>':""}</td>`
+      +`<td>${(r.score||0).toLocaleString()}</td>`
+      +`<td>${r.pts_per_min>0?"+"+Math.round(r.pts_per_min).toLocaleString():"±0"}</td>`
+      +`<td class="${dc}">${(r.is_target||d==null)?"—":fmtDiff(d)}</td></tr>`;
+  }).join("");
   const url=e.event_url
     ?`<div class="url"><a href="${esc(e.event_url)}" target="_blank" rel="noopener">${esc(e.event_url)}</a></div>`
     :"";
+  const head=t
+    ?`<div style="margin-top:8px"><span class="sub">${esc(t.name)}</span> `
+      +`<span class="sub">${t.rank}位</span> <span class="big">${(t.score||0).toLocaleString()}</span>`
+      +`<span class="sub"> pt</span></div>`+cmpLines(e)
+    :'<div class="sub" style="margin-top:8px">追跡対象なし</div>';
+  const cap=t?`全順位　（${esc(t.name)} さんとの差）`:"全順位";
   return `<div class="card"><div class="ev">${esc(e.festival_name)}</div>${url}`
     +`<div class="sub">${esc(e.block_label)}　${left(e.event_end)}</div>`
-    +(t?`<div style="margin-top:8px"><span class="sub">${esc(t.name)}</span> `
-        +`<span class="sub">${t.rank}位</span> <span class="big">${(t.score||0).toLocaleString()}</span>`
-        +`<span class="sub"> pt</span>`
-        +(g?`　<span class="gap ${g.d}">${g.v>=0?"+":"−"}${man(g.v)}万</span>`
-            +`<span class="sub"> ${esc(g.n)}</span>`:"")
-        +`</div>`:'<div class="sub" style="margin-top:8px">追跡対象なし</div>')
-    +`<table><tr><th>順位</th><th class="l">ライバー</th><th>pt</th><th>pt/分</th></tr>${rows}</table></div>`;
+    +head
+    +`<div class="sub" style="margin-top:12px">${cap}</div>`
+    +`<table><tr><th>順位</th><th class="l">ライバー</th><th>pt</th><th>pt/分</th><th>差</th></tr>${rows}</table></div>`;
 }
+function render(){ if(LAST) $("list").innerHTML=LAST.events.map(card).join(""); }
 
 function showSetup(msg){
   $("setup").classList.add("on");
@@ -145,7 +220,7 @@ async function tick(){
     $("title").textContent="Pococha ポイント差";
     $("meta").textContent=d.events.length?`${d.events.length} イベントを追跡中`
       :"いま追跡しているイベントはありません";
-    $("list").innerHTML=d.events.map(card).join("");
+    LAST=d; render();
     const age=d.events[0]&&d.events[0].age_sec!=null?`（取得 ${d.events[0].age_sec} 秒前）`:"";
     $("foot").textContent="更新 "+new Date().toLocaleTimeString("ja-JP")+age;
   }catch(e){
@@ -156,7 +231,7 @@ async function tick(){
     if(fails===1&&!$("list").innerHTML) showSetup('<span class="err">つながりません</span>');
   }
 }
-tick(); start();
+renderCmp(); tick(); start();
 </script>
 </body>
 </html>
