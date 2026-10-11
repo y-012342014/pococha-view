@@ -117,15 +117,27 @@ $("save").onclick=()=>{
   C={api:$("api").value.trim().replace(/\/+$/,""), k:$("key").value.trim()};
   localStorage.setItem(LS,JSON.stringify(C));
   $("setup").classList.remove("on");
-  tick();
+  start(); tick();
 };
 
-let fails=0;
+let fails=0, timer=null;
+// 間違った合い言葉で 1 秒ごとに問い合わせ続けると、PC 側の回数制限に掛かる。
+// 403（違う）や 429（一時停止中）を受けたら、いったん止めて入力を待つ。
+function start(){ if(!timer) timer=setInterval(tick,1000); }
+function stop(){ clearInterval(timer); timer=null; }
 async function tick(){
-  if(!C.api||!C.k){ showSetup(); return; }
+  if(!C.api||!C.k){ stop(); showSetup(); return; }
   try{
     const r=await fetch(C.api+"/api/public?k="+encodeURIComponent(C.k),{cache:"no-store"});
-    if(r.status===401||r.status===403){ showSetup('<span class="err">合い言葉が違います</span>'); return; }
+    if(r.status===401||r.status===403){ stop(); showSetup('<span class="err">合い言葉が違います</span>'); return; }
+    if(r.status===429){
+      const j=await r.json().catch(()=>({}));
+      stop();
+      const m=Math.ceil((j.retry_sec||900)/60);
+      showSetup(`<span class="err">合い言葉を何度か間違えたため、一時的に止めています</span>`
+        +`<span class="sub">約${m}分たってから開き直してください</span>`);
+      return;
+    }
     if(!r.ok) throw new Error("HTTP "+r.status);
     const d=await r.json();
     fails=0;
@@ -144,7 +156,7 @@ async function tick(){
     if(fails===1&&!$("list").innerHTML) showSetup('<span class="err">つながりません</span>');
   }
 }
-tick(); setInterval(tick,1000);
+tick(); start();
 </script>
 </body>
 </html>
