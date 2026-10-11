@@ -32,10 +32,13 @@
   .big{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
   .gap{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
   .up{color:var(--neg)}.down{color:var(--pos)}
-  table{width:100%;border-collapse:collapse;margin-top:10px;font-variant-numeric:tabular-nums}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-variant-numeric:tabular-nums;table-layout:fixed}
+  /* 列の幅を決め打ちにする。長い名前（絵文字つき）で右端の列が押し出されないように */
+  th:nth-child(1){width:28px}th:nth-child(3){width:76px}th:nth-child(4){width:50px}th:nth-child(5){width:64px}
   th,td{padding:5px 4px;border-bottom:1px solid var(--line);font-size:13px;text-align:right}
   th{color:var(--sub);font-weight:600;font-size:11px}
-  td.l,th.l{text-align:left;max-width:48vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* 名前は折り返す。「ｲﾍﾞﾗｽ…」で始まる名前が多く、途中で切ると見分けが付かないため */
+  td.l,th.l{text-align:left;overflow-wrap:anywhere;line-height:1.35}
   tr.me td{color:var(--accent);font-weight:700}
   .live{color:var(--pos);font-size:10px}
   .err{color:var(--neg)}
@@ -58,6 +61,7 @@
   .cl .cn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cl .gap{font-size:16px}
   td.up,td.down{font-weight:700}
+  .org{display:block;font-size:10px;line-height:1.3;color:var(--sub);font-weight:400}
 </style>
 </head>
 <body><div class="wrap">
@@ -154,13 +158,34 @@ function cmpLines(e){
   return out.length?`<div class="cmpl">${out.join("")}</div>`:"";
 }
 
+// 事務所対抗イベントのときだけ出る。合計は、いまのランキングを事務所ごとに足したもの。
+// 差は「追跡対象の事務所 − その事務所」。
+function orgTable(e){
+  const o=e.orgs; if(!o||!o.orgs||!o.orgs.length) return "";
+  const me=o.orgs.find(x=>x.is_target);
+  const rows=o.orgs.map(x=>{
+    const d=me?me.score-x.score:null;
+    const dc=(x.is_target||d==null)?"":(d>=0?"down":"up");
+    return `<tr class="${x.is_target?"me":""}"><td>${x.rank}</td>`
+      +`<td class="l">${esc(x.org)}<span class="org">${x.members}人${x.live?`・配信中 ${x.live}人`:""}</span></td>`
+      +`<td>${(x.score||0).toLocaleString()}</td>`
+      +`<td>${x.pts_per_min>0?"+"+Math.round(x.pts_per_min).toLocaleString():"±0"}</td>`
+      +`<td class="${dc}">${(x.is_target||d==null)?"—":fmtDiff(d)}</td></tr>`;
+  }).join("");
+  const note=(o.unknown||o.absent)
+    ?`<div class="sub">※ 事務所が分からない人 ${o.unknown}人・ランキングに出ていない人 ${o.absent}人</div>`:"";
+  return `<div class="sub" style="margin-top:12px">事務所ランキング${me?`　（${esc(me.org)} との差）`:""}</div>`
+    +`<table><tr><th>順位</th><th class="l">事務所</th><th>pt</th><th>pt/分</th><th>差</th></tr>${rows}</table>${note}`;
+}
+
 function card(e){
   const t=e.target;
   const rows=(e.rows||[]).map(r=>{
     const d=t?t.score-r.score:null;
     const dc=(r.is_target||d==null)?"":(d>=0?"down":"up");
     return `<tr class="${r.is_target?"me":""}">`
-      +`<td>${r.rank}</td><td class="l">${esc(r.name)}${r.live?' <span class="live">●LIVE</span>':""}</td>`
+      +`<td>${r.rank}</td><td class="l">${esc(r.name)}${r.live?' <span class="live">●LIVE</span>':""}`
+      +`${r.org?`<span class="org">${esc(r.org)}</span>`:""}</td>`
       +`<td>${(r.score||0).toLocaleString()}</td>`
       +`<td>${r.pts_per_min>0?"+"+Math.round(r.pts_per_min).toLocaleString():"±0"}</td>`
       +`<td class="${dc}">${(r.is_target||d==null)?"—":fmtDiff(d)}</td></tr>`;
@@ -177,6 +202,7 @@ function card(e){
   return `<div class="card"><div class="ev">${esc(e.festival_name)}</div>${url}`
     +`<div class="sub">${esc(e.block_label)}　${left(e.event_end)}</div>`
     +head
+    +orgTable(e)
     +`<div class="sub" style="margin-top:12px">${cap}</div>`
     +`<table><tr><th>順位</th><th class="l">ライバー</th><th>pt</th><th>pt/分</th><th>差</th></tr>${rows}</table></div>`;
 }
