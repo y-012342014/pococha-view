@@ -27,6 +27,8 @@
   .sub{color:var(--sub);font-size:12px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:13px 15px;margin-top:12px}
   .ev{font-weight:700}
+  .url{font-size:12px;margin-top:2px;overflow-wrap:anywhere}
+  .url a{color:var(--accent)}
   .big{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
   .gap{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
   .up{color:var(--neg)}.down{color:var(--pos)}
@@ -91,7 +93,10 @@ function card(e){
     +`<td>${r.rank}</td><td class="l">${esc(r.name)}${r.live?' <span class="live">●LIVE</span>':""}</td>`
     +`<td>${(r.score||0).toLocaleString()}</td>`
     +`<td>${r.pts_per_min>0?"+"+Math.round(r.pts_per_min).toLocaleString():"±0"}</td></tr>`).join("");
-  return `<div class="card"><div class="ev">${esc(e.festival_name)}</div>`
+  const url=e.event_url
+    ?`<div class="url"><a href="${esc(e.event_url)}" target="_blank" rel="noopener">${esc(e.event_url)}</a></div>`
+    :"";
+  return `<div class="card"><div class="ev">${esc(e.festival_name)}</div>${url}`
     +`<div class="sub">${esc(e.block_label)}　${left(e.event_end)}</div>`
     +(t?`<div style="margin-top:8px"><span class="sub">${esc(t.name)}</span> `
         +`<span class="sub">${t.rank}位</span> <span class="big">${(t.score||0).toLocaleString()}</span>`
