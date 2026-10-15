@@ -82,7 +82,12 @@
     8%{opacity:1}88%{opacity:1}100%{transform:translate(-100%,84vh) rotate(-14deg);opacity:0}}
   @keyframes bdIn{from{opacity:0}to{opacity:1}}
   @keyframes pop{0%{transform:scale(.3)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
-  @media (prefers-reduced-motion:reduce){.bd,.bd .cake{animation:none}
+  /* 閉じた後に一言だけ出して、すぐ消える */
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;background:var(--card);
+    color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:8px 16px;font-size:14px;
+    box-shadow:0 6px 20px rgba(0,0,0,.35);pointer-events:none;animation:toastIn .25s ease-out;white-space:nowrap}
+  @keyframes toastIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+  @media (prefers-reduced-motion:reduce){.toast{animation:none}.bd,.bd .cake{animation:none}
     .bd .star{animation:none;opacity:.6;transform:translate(4vw,2vh) rotate(-14deg)}.bd .star.s2{display:none}}
 </style>
 </head>
@@ -245,11 +250,19 @@ function greet(g){
     +`<div class="box"><span class="cake" aria-hidden="true">🎂</span>`
     +`<h2>${esc(g.title)}</h2><p>${esc(g.message)}</p><button type="button">とじる</button></div>`;
   document.body.appendChild(el);
-  const close=()=>el.remove();
+  const close=()=>{ el.remove(); thanks(); };
   el.querySelector("button").onclick=close;
   el.addEventListener("click",e=>{ if(e.target===el) close(); });
   el.querySelector("button").focus();
   if(!matchMedia("(prefers-reduced-motion: reduce)").matches) confetti(el.querySelector("canvas"));
+}
+// お祝いを閉じた後の一言。2秒ほどで消える
+function thanks(){
+  const t=document.createElement("div");
+  t.className="toast"; t.setAttribute("role","status");
+  t.textContent="センスなくてごめん🧎";
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2200);
 }
 function confetti(cv){
   const ctx=cv.getContext("2d"),dpr=window.devicePixelRatio||1;
