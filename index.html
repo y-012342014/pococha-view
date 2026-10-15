@@ -70,10 +70,20 @@
     border:1px solid var(--line);max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.45)}
   .bd .cake{font-size:46px;display:block;line-height:1.2;animation:pop 1.1s ease-out}
   .bd h2{font-size:30px;margin:6px 0 8px;color:var(--accent);letter-spacing:.02em}
-  .bd p{margin:0 0 18px;font-size:15px;line-height:1.7}
+  .bd p{margin:0 0 18px;font-size:16px;line-height:1.8;white-space:pre-line}
+  /* 背景を流れ星のように横切る画像（黒い地は透明にしてある） */
+  .bd .star{position:absolute;left:0;top:0;width:min(80vw,560px);pointer-events:none;
+    opacity:0;animation:flyTop 4.4s linear infinite}
+  .bd .star.s2{width:min(56vw,360px);animation:flyBot 3.8s linear 2.2s infinite}
+  /* カードの上と下を通るように飛ばす（真ん中はカードで隠れるため） */
+  @keyframes flyTop{0%{transform:translate(100vw,-6vh) rotate(-14deg);opacity:0}
+    8%{opacity:1}88%{opacity:1}100%{transform:translate(-100%,16vh) rotate(-14deg);opacity:0}}
+  @keyframes flyBot{0%{transform:translate(100vw,64vh) rotate(-14deg);opacity:0}
+    8%{opacity:1}88%{opacity:1}100%{transform:translate(-100%,84vh) rotate(-14deg);opacity:0}}
   @keyframes bdIn{from{opacity:0}to{opacity:1}}
   @keyframes pop{0%{transform:scale(.3)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
-  @media (prefers-reduced-motion:reduce){.bd,.bd .cake{animation:none}}
+  @media (prefers-reduced-motion:reduce){.bd,.bd .cake{animation:none}
+    .bd .star{animation:none;opacity:.6;transform:translate(4vw,2vh) rotate(-14deg)}.bd .star.s2{display:none}}
 </style>
 </head>
 <body><div class="wrap">
@@ -229,7 +239,10 @@ function greet(g){
   catch(e){ if(window._greeted) return; window._greeted=1; }
   const el=document.createElement("div");
   el.className="bd"; el.setAttribute("role","dialog"); el.setAttribute("aria-label",g.title||"お知らせ");
-  el.innerHTML=`<canvas></canvas><div class="box"><span class="cake" aria-hidden="true">🎂</span>`
+  const img=g.image?`${C.api}/api/greeting-image?k=${encodeURIComponent(C.k)}`:"";
+  el.innerHTML=`<canvas></canvas>`
+    +(img?`<img class="star" src="${img}" alt=""><img class="star s2" src="${img}" alt="">`:"")
+    +`<div class="box"><span class="cake" aria-hidden="true">🎂</span>`
     +`<h2>${esc(g.title)}</h2><p>${esc(g.message)}</p><button type="button">とじる</button></div>`;
   document.body.appendChild(el);
   const close=()=>el.remove();
