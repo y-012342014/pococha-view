@@ -62,6 +62,18 @@
   .cl .gap{font-size:16px}
   td.up,td.down{font-weight:700}
   .org{display:block;font-size:10px;line-height:1.3;color:var(--sub);font-weight:400}
+  /* お祝いなどのひとこと（PC 側が期間中だけ送ってくる。見る人ごとに1回だけ） */
+  .bd{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+    background:rgba(8,10,16,.74);animation:bdIn .4s ease-out;padding:16px}
+  .bd canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .bd .box{position:relative;text-align:center;padding:26px 22px 20px;border-radius:16px;background:var(--card);
+    border:1px solid var(--line);max-width:420px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+  .bd .cake{font-size:46px;display:block;line-height:1.2;animation:pop 1.1s ease-out}
+  .bd h2{font-size:30px;margin:6px 0 8px;color:var(--accent);letter-spacing:.02em}
+  .bd p{margin:0 0 18px;font-size:15px;line-height:1.7}
+  @keyframes bdIn{from{opacity:0}to{opacity:1}}
+  @keyframes pop{0%{transform:scale(.3)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
+  @media (prefers-reduced-motion:reduce){.bd,.bd .cake{animation:none}}
 </style>
 </head>
 <body><div class="wrap">
@@ -208,6 +220,47 @@ function card(e){
 }
 function render(){ if(LAST) $("list").innerHTML=LAST.events.map(card).join(""); }
 
+// ---- お祝いなどのひとこと。PC 側が期間中だけ data.greeting を付けてくる。
+// 日付や文面はこのページ（公開リポジトリ）には書かない。見た印はこのブラウザに残し、2回目からは出さない。
+const GK="pococha-greeting-";
+function greet(g){
+  if(!g||!g.id||document.querySelector(".bd")) return;
+  try{ if(localStorage.getItem(GK+g.id)) return; localStorage.setItem(GK+g.id,String(Date.now())); }
+  catch(e){ if(window._greeted) return; window._greeted=1; }
+  const el=document.createElement("div");
+  el.className="bd"; el.setAttribute("role","dialog"); el.setAttribute("aria-label",g.title||"お知らせ");
+  el.innerHTML=`<canvas></canvas><div class="box"><span class="cake" aria-hidden="true">🎂</span>`
+    +`<h2>${esc(g.title)}</h2><p>${esc(g.message)}</p><button type="button">とじる</button></div>`;
+  document.body.appendChild(el);
+  const close=()=>el.remove();
+  el.querySelector("button").onclick=close;
+  el.addEventListener("click",e=>{ if(e.target===el) close(); });
+  el.querySelector("button").focus();
+  if(!matchMedia("(prefers-reduced-motion: reduce)").matches) confetti(el.querySelector("canvas"));
+}
+function confetti(cv){
+  const ctx=cv.getContext("2d"),dpr=window.devicePixelRatio||1;
+  cv.width=innerWidth*dpr; cv.height=innerHeight*dpr;
+  const cols=["#4de0c0","#ff7b7b","#ffd166","#9b8cff","#5bd98a","#ff9ad5"];
+  const P=Array.from({length:150},()=>({x:Math.random()*cv.width,y:-Math.random()*cv.height,
+    vx:(Math.random()-.5)*2*dpr,vy:(2+Math.random()*3)*dpr,s:(5+Math.random()*6)*dpr,
+    r:Math.random()*6,vr:(Math.random()-.5)*.2,c:cols[Math.floor(Math.random()*cols.length)]}));
+  const t0=performance.now();
+  (function f(t){
+    if(!cv.isConnected) return;
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const stop=t-t0>7000; let alive=0;           // 7秒たったら降らせるのをやめ、落ちきったら終わる
+    for(const p of P){
+      p.x+=p.vx; p.y+=p.vy; p.r+=p.vr;
+      if(p.y>cv.height){ if(stop) continue; p.y=-10; p.x=Math.random()*cv.width; }
+      alive++;
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.r); ctx.fillStyle=p.c;
+      ctx.fillRect(-p.s/2,-p.s/4,p.s,p.s/2); ctx.restore();
+    }
+    if(alive) requestAnimationFrame(f);
+  })(t0);
+}
+
 function showSetup(msg){
   $("setup").classList.add("on");
   $("api").value=C.api||""; $("key").value=C.k||"";
@@ -247,6 +300,7 @@ async function tick(){
     $("meta").textContent=d.events.length?`${d.events.length} イベントを追跡中`
       :"いま追跡しているイベントはありません";
     LAST=d; render();
+    if(d.greeting) greet(d.greeting);
     const age=d.events[0]&&d.events[0].age_sec!=null?`（取得 ${d.events[0].age_sec} 秒前）`:"";
     $("foot").textContent="更新 "+new Date().toLocaleTimeString("ja-JP")+age;
   }catch(e){
